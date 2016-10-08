@@ -31,12 +31,12 @@ def _hs_binary_impl(ctx):
   )
 
   ctx.action(
-      inputs = list(ctx.files.srcs + ctx.files.deps),
+      inputs = list(ctx.files.srcs + ctx.files.deps + [ctx.outputs.o]),
       outputs = [ctx.outputs.executable],
       command = (
           "HOME=/fake ghc -o %s " % ctx.outputs.executable.path +
           "-i%s " % ctx.configuration.bin_dir.path +
-          cmd_helper.join_paths(" ", set(ctx.files.srcs) + set(ctx.files.deps))
+          cmd_helper.join_paths(" ", set([ctx.outputs.o]) + set(ctx.files.deps))
       ),
       use_default_shell_env = True,
   )

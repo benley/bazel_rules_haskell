@@ -1,4 +1,4 @@
-module Ch4_3 where
+module Examples.Ch4_3 where
 
 data Mood = Blah | Woot deriving Show
 
