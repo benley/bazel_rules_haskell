@@ -1,0 +1,8 @@
+module Main where
+
+import Examples.Ch4_3
+
+main = do
+    putStrLn "hello world"
+    print foo.bar
+    print Ch4_3.awesome
