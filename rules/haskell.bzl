@@ -1,53 +1,40 @@
 def _hs_library_impl(ctx):
-  outs = []
-  for src in ctx.files.srcs:
-    base = src.basename.rsplit(".", 1)[0]
-    outs += [ctx.new_file(base + ".hi"),
-             ctx.new_file(base + ".o")]
+  """Haskell library
+
+  At the moment this only really works with a single file in srcs.
+  """
+  # Using new_file here instead of ctx.outputs to keep it reusable within
+  # _hs_binary_impl
+  out_o = ctx.new_file(ctx.label.name + ".o")
+  out_hi = ctx.new_file(ctx.label.name + ".hi")
   ctx.action(
-      inputs = ctx.files.srcs,
-      outputs = outs,
-      command = (
-          "HOME=/fake ghc -c " +
-          "-outputdir %s " % outs[0].dirname +
-          "-i%s " % ctx.configuration.bin_dir.path +
+      inputs = ctx.files.srcs + ctx.files.deps,
+      outputs = [out_o, out_hi],
+      command = " ".join([
+          "HOME=/fake", "ghc", "-c",
+          "-o", out_o.path,
+          "-ohi",out_hi.path,
+          "-i%s" % ctx.configuration.bin_dir.path,  # <-- not entirely correct
           cmd_helper.join_paths(" ", set(ctx.files.srcs))
-      ),
+      ]),
       use_default_shell_env = True,
   )
+  return struct(obj = out_o,
+                interface = out_hi)
 
 def _hs_binary_impl(ctx):
-  # Currently broken.
+  lib_self = _hs_library_impl(ctx)
+  objects = [x.obj for x in ctx.attr.deps] + [lib_self.obj]
   ctx.action(
-      inputs = list(ctx.files.srcs + ctx.files.deps),
-      outputs = [ctx.outputs.o],
-      command = (
-          "HOME=/fake ghc -c " +
-          "-outputdir %s " % ctx.outputs.o.dirname +
-          "-i%s " % ctx.configuration.bin_dir.path +
-          cmd_helper.join_paths(" " , set(ctx.files.srcs))
-      ),
-      use_default_shell_env = True,
-  )
-
-  ctx.action(
-      inputs = list(ctx.files.srcs + ctx.files.deps + [ctx.outputs.o]),
+      inputs = objects,
       outputs = [ctx.outputs.executable],
-      command = (
-          "HOME=/fake ghc -o %s " % ctx.outputs.executable.path +
-          "-i%s " % ctx.configuration.bin_dir.path +
-          cmd_helper.join_paths(" ", set([ctx.outputs.o]) + set(ctx.files.deps))
-      ),
+      command = " ".join([
+          "HOME=/fake", "ghc",
+          "-o", ctx.outputs.executable.path,
+          cmd_helper.join_paths(" ", set(objects))
+      ]),
       use_default_shell_env = True,
   )
-
-def _gen_hs_lib_outs(srcs, deps):
-  outs = {}
-  for src in srcs:
-    base = src.name.rsplit(".", 1)[0]
-    outs[base+"_o"] = base + ".o"
-    outs[base+"_hi"] = base + ".hi"
-  return outs
 
 hs_library = rule(
     implementation = _hs_library_impl,
@@ -59,7 +46,10 @@ hs_library = rule(
             allow_files = False,
         ),
     },
-    outputs = _gen_hs_lib_outs,
+    outputs = {
+        "obj": "%{name}.o",
+        "interface": "%{name}.hi",
+    },
 )
 
 hs_binary = rule(
@@ -71,9 +61,6 @@ hs_binary = rule(
         "deps": attr.label_list(
             allow_files = FileType([".o"]),
         ),
-    },
-    outputs = {
-        "o": "%{name}.o",
     },
     executable = True,
 )
